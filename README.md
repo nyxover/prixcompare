@@ -11,6 +11,7 @@ Fonctionne **entièrement dans le navigateur**, sans serveur : les données sont
 |---|---|
 | `index.html` | Interface (onglets, formulaires, tableaux) |
 | `app.js` | Logique de l'application (données, rendu, import/export) |
+| `cloud.js` | Synchronisation optionnelle vers un bucket Supabase Storage |
 | `run.sh` | Petit script pour lancer un serveur local |
 
 ## Démarrage
@@ -126,6 +127,69 @@ Les données vivent dans le `localStorage` du navigateur. Elles sont donc liées
 - Changer de navigateur ou d'ordinateur ne transfère pas les données.
 
 **Bonne pratique : exporter régulièrement en JSON** (onglet Réglages) et conserver ce fichier comme sauvegarde.
+
+---
+
+## Cloud — démo partagée (optionnel)
+
+Par défaut, les données restent **locales** au navigateur (`localStorage`). Pour que tous les visiteurs de la démo voient les mêmes données, on peut brancher un **bucket Supabase Storage** (gratuit).
+
+### Pourquoi un bucket ?
+
+L'application sérialise déjà tout dans un seul document JSON (+ des photos). Un bucket suffit donc :
+
+```
+bucket prixcompare/
+  db.json            ← { products, purchases }
+  photos/<id>.jpg    ← les images
+```
+
+> ⚠️ Un bucket stocke des fichiers, pas des lignes : un seul `db.json` signifie « dernier écrivain gagne ». Si deux personnes ajoutent un produit au même instant, l'une des deux écritures peut être perdue. Acceptable pour une démo ; pour du multi-utilisateur sérieux, il faut une vraie base (Supabase Postgres, Cloudflare D1…).
+
+### Mise en place (une seule fois)
+
+1. Créer un projet gratuit sur [supabase.com](https://supabase.com).
+2. **Storage → New bucket** : nom `prixcompare`, cocher **Public bucket**, créer.
+3. Autoriser l'écriture pour le rôle anonyme — dans **SQL Editor** :
+
+   ```sql
+   create policy "anon write" on storage.objects
+     for insert to anon with check (bucket_id = 'prixcompare');
+
+   create policy "anon update" on storage.objects
+     for update to anon using (bucket_id = 'prixcompare');
+   ```
+
+   (La lecture est publique via le bucket « Public ».)
+4. **Settings → API** : copier **Project URL** et la clé **anon public**.
+5. Ouvrir `cloud.js` et coller les deux valeurs en haut du fichier :
+
+   ```js
+   const CLOUD_CONFIG = {
+     url: 'https://xxxxxxxx.supabase.co',
+     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+     bucket: 'prixcompare',
+     ...
+   };
+   ```
+
+### Comportement
+
+- **Au démarrage** : l'app lit `db.json` depuis le bucket. S'il n'existe pas encore, elle y publie les données locales (amorçage).
+- **À chaque enregistrement** : écriture locale immédiate (cache) puis envoi différé vers le bucket (~1 s d'anti-rebond).
+- **Photos** : envoyées dans le bucket et remplacées par leur URL publique ; en cas d'échec, l'image reste stockée localement (data URL).
+- **Boutons** (Réglages → Cloud) : *Synchroniser maintenant* (pousser) et *Recharger depuis le cloud* (tirer).
+- Sans configuration, tout reste local : aucune requête réseau n'est émise.
+
+### Sécurité
+
+- La clé **anon public** est conçue pour être exposée dans un site statique ; ce sont les **policies RLS** qui contrôlent les accès.
+- **Ne jamais** mettre la clé `service_role` dans `cloud.js`.
+- Sur un projet gratuit, Supabase **met le projet en pause après 7 jours d'inactivité** — un cron externe gratuit (ex. cron-job.org) pinguant l'URL du projet suffit à l'éviter.
+
+### Limites du plan gratuit Supabase
+
+1 Go de stockage, upload max 50 Mo, 5 Go d'egress/mois, 2 projets actifs.
 
 ---
 

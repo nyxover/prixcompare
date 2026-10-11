@@ -10,7 +10,8 @@ function normalize(s) {
 function load() {
   try { return JSON.parse(localStorage.getItem(DB_KEY)) || {products:[], purchases:[]}; } catch(e) { return {products:[], purchases:[]}; }
 }
-function save(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function saveLocal(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function save(db) { saveLocal(db); if (typeof Cloud !== 'undefined') Cloud.queueSave(db); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
 let db = load();
@@ -45,9 +46,11 @@ modeSel.addEventListener('change', () => {
 
 // photo previews
 let mPhoto = null, pPhoto = null;
+let mPhotoFile = null, pPhotoFile = null;
 document.getElementById('m-photo').addEventListener('click', () => document.getElementById('m-photo-file').click());
 document.getElementById('m-photo-file').addEventListener('change', (e) => {
   const f = e.target.files[0]; if (!f) return;
+  mPhotoFile = f;
   const r = new FileReader();
   r.onload = (ev) => { mPhoto = ev.target.result; const img = document.getElementById('m-photo-prev'); img.src = mPhoto; img.style.display = 'block'; };
   r.readAsDataURL(f);
@@ -55,13 +58,23 @@ document.getElementById('m-photo-file').addEventListener('change', (e) => {
 document.getElementById('p-photo').addEventListener('click', () => document.getElementById('p-photo-file').click());
 document.getElementById('p-photo-file').addEventListener('change', (e) => {
   const f = e.target.files[0]; if (!f) return;
+  pPhotoFile = f;
   const r = new FileReader();
   r.onload = (ev) => { pPhoto = ev.target.result; const img = document.getElementById('p-photo-prev'); img.src = pPhoto; img.style.display = 'block'; };
   r.readAsDataURL(f);
 });
 
+// Si le cloud est actif, envoie la photo dans le bucket et renvoie son URL.
+// Sinon (ou en cas d'échec) on garde l'image en data URL locale.
+async function resolveImage(dataUrl, file) {
+  if (file && typeof Cloud !== 'undefined' && Cloud.enabled()) {
+    try { return await Cloud.uploadPhotoFile(file); } catch (e) { /* repli local */ }
+  }
+  return dataUrl;
+}
+
 // save manual
-document.getElementById('m-save').addEventListener('click', () => {
+document.getElementById('m-save').addEventListener('click', async () => {
   const name = document.getElementById('m-name').value.trim();
   const barcode = document.getElementById('m-barcode').value.trim() || null;
   const price = parseFloat((document.getElementById('m-price').value.replace(',', '.')));
@@ -70,13 +83,14 @@ document.getElementById('m-save').addEventListener('click', () => {
   let date = document.getElementById('m-date').value;
   if (!date) date = new Date().toISOString().slice(0,10);
   if (!name || isNaN(price)) { alert('Nom et prix requis'); return; }
+  const img = await resolveImage(mPhoto, mPhotoFile);
   let prod = barcode ? db.products.find(p => p.barcode === barcode) : null;
   if (!prod) prod = db.products.find(p => normalize(p.name) === normalize(name));
   if (!prod) {
-    prod = { id: uid(), name, barcode, normalized_name: normalize(name), category: null, image_path: mPhoto || null, updated_at: new Date().toISOString() };
+    prod = { id: uid(), name, barcode, normalized_name: normalize(name), category: null, image_path: img, updated_at: new Date().toISOString() };
     db.products.push(prod);
   } else {
-    if (mPhoto) prod.image_path = mPhoto;
+    if (img) prod.image_path = img;
     prod.updated_at = new Date().toISOString();
   }
   const purch = { id: uid(), product_id: prod.id, store, price, quantity: isNaN(qty)?1:qty, date, note: null, created_at: new Date().toISOString() };
@@ -84,7 +98,7 @@ document.getElementById('m-save').addEventListener('click', () => {
   save(db);
   refreshStores();
   alert('Enregistré');
-  document.getElementById('m-name').value=''; document.getElementById('m-barcode').value=''; document.getElementById('m-price').value=''; document.getElementById('m-qty').value='1'; document.getElementById('m-store').value=''; document.getElementById('m-photo-prev').style.display='none'; mPhoto=null; document.getElementById('m-photo-file').value='';
+  document.getElementById('m-name').value=''; document.getElementById('m-barcode').value=''; document.getElementById('m-price').value=''; document.getElementById('m-qty').value='1'; document.getElementById('m-store').value=''; document.getElementById('m-photo-prev').style.display='none'; mPhoto=null; mPhotoFile=null; document.getElementById('m-photo-file').value='';
 });
 
 // scan camera
@@ -164,17 +178,18 @@ document.getElementById('s-save').addEventListener('click', () => {
 });
 
 // photo
-document.getElementById('p-save').addEventListener('click', () => {
+document.getElementById('p-save').addEventListener('click', async () => {
   const name = document.getElementById('p-name').value.trim();
   const price = parseFloat((document.getElementById('p-price').value.replace(',', '.')));
   const store = document.getElementById('p-store').value.trim() || 'Inconnu';
   if (!name || isNaN(price) || !pPhoto) { alert('Photo, nom, prix requis'); return; }
+  const img = await resolveImage(pPhoto, pPhotoFile);
   let prod = db.products.find(p => normalize(p.name) === normalize(name));
   if (!prod) {
-    prod = { id: uid(), name, barcode: null, normalized_name: normalize(name), category: null, image_path: pPhoto, updated_at: new Date().toISOString() };
+    prod = { id: uid(), name, barcode: null, normalized_name: normalize(name), category: null, image_path: img, updated_at: new Date().toISOString() };
     db.products.push(prod);
   } else {
-    prod.image_path = pPhoto; prod.updated_at = new Date().toISOString();
+    prod.image_path = img; prod.updated_at = new Date().toISOString();
   }
   const purch = { id: uid(), product_id: prod.id, store, price, quantity: 1, date: new Date().toISOString().slice(0,10), note: null, created_at: new Date().toISOString() };
   db.purchases.push(purch);
@@ -242,6 +257,67 @@ function refreshStores() {
   });
 }
 function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[c]));}
+
+// ---- cloud (Supabase Storage) -----------------------------------------
+function renderCloudStatus(state, detail) {
+  const el = document.getElementById('cloud-status');
+  if (!el) return;
+  if (typeof Cloud === 'undefined' || !Cloud.enabled()) {
+    el.textContent = 'Désactivé — données locales uniquement (localStorage)';
+    return;
+  }
+  const map = { syncing: 'Synchronisation…', idle: 'Connecté', error: 'Erreur', off: 'Connecté' };
+  let txt = map[state] || state;
+  if (detail) txt += ' (' + detail + ')';
+  if (Cloud.lastSync()) txt += ' • dernière sync ' + new Date(Cloud.lastSync()).toLocaleTimeString();
+  el.textContent = txt;
+}
+async function pushToCloud(silent) {
+  if (typeof Cloud === 'undefined' || !Cloud.enabled()) {
+    if (!silent) alert('Cloud non configuré : renseigne url et anonKey dans cloud.js'); return;
+  }
+  try {
+    await Cloud.saveDb(db);
+    renderCloudStatus('idle');
+    if (!silent) alert('Enregistré dans le cloud');
+  } catch (e) {
+    renderCloudStatus('error', e.message);
+    if (!silent) alert('Échec de la synchronisation : ' + e.message);
+  }
+}
+async function pullFromCloud() {
+  if (typeof Cloud === 'undefined' || !Cloud.enabled()) { alert('Cloud non configuré : renseigne url et anonKey dans cloud.js'); return; }
+  try {
+    const remote = await Cloud.loadDb();
+    if (!remote) { alert('Aucune donnée dans le cloud pour le moment'); return; }
+    db = { products: remote.products || [], purchases: remote.purchases || [] };
+    saveLocal(db);
+    refreshStores(); renderProducts(); renderHistory(); renderCompare();
+    alert('Données rechargées depuis le cloud');
+  } catch (e) { alert('Échec du chargement : ' + e.message); }
+}
+async function initCloud() {
+  if (typeof Cloud === 'undefined') return;
+  Cloud.onStatus(renderCloudStatus);
+  renderCloudStatus('off');
+  if (!Cloud.enabled()) return;
+  try {
+    const remote = await Cloud.loadDb();
+    if (remote && (Array.isArray(remote.products) || Array.isArray(remote.purchases))) {
+      db = { products: remote.products || [], purchases: remote.purchases || [] };
+      saveLocal(db);
+      refreshStores(); renderProducts(); renderHistory(); renderCompare();
+    } else {
+      // premier lancement : on publie les données locales
+      await Cloud.saveDb(db);
+    }
+    renderCloudStatus('idle');
+  } catch (e) {
+    renderCloudStatus('error', e.message);
+  }
+}
+document.getElementById('cloud-push').addEventListener('click', () => pushToCloud(false));
+document.getElementById('cloud-pull').addEventListener('click', pullFromCloud);
 
 // export/import
 document.getElementById('exp-csv').addEventListener('click', () => {
@@ -432,3 +508,4 @@ document.getElementById('imp-json').addEventListener('change', (e) => {
 
 refreshStores();
 renderProducts();
+initCloud();
