@@ -10,7 +10,6 @@ Fonctionne **entièrement dans le navigateur**, sans serveur : les données sont
 | `index.html` | Interface (onglets, formulaires, tableaux) |
 | `app.js` | Logique de l'application (données, rendu, import/export) |
 | `run.sh` | Petit script pour lancer un serveur local |
-| `.github/workflows/pages.yml` | Déploiement automatique sur GitHub Pages |
 
 ## Démarrage
 
@@ -130,20 +129,23 @@ Les données vivent dans le `localStorage` du navigateur. Elles sont donc liées
 
 ## Déploiement sur GitHub Pages
 
-Le site étant 100 % statique, il se déploie automatiquement via GitHub Actions (`.github/workflows/pages.yml`).
+Le site étant 100 % statique, GitHub Pages le publie **directement depuis la branche `main`** (aucune compilation ni exécution de workflow nécessaire).
 
 ### Mise en place (une seule fois)
 
-1. Créer un dépôt sur GitHub et pousser le projet :
+1. Pousser le projet sur GitHub :
    ```sh
    git remote add origin https://github.com/<utilisateur>/<depot>.git
    git push -u origin main
    ```
-2. Dans le dépôt : **Settings → Pages**, puis dans **Build and deployment → Source**, choisir **GitHub Actions**.
+2. Dans le dépôt : **Settings → Pages → Build and deployment → Source** :
+   - **Source** : `Deploy from a branch`
+   - **Branch** : `main`, dossier `/ (root)`
+   - Cliquer sur **Save**
 
 ### Par la suite
 
-Chaque `push` sur la branche `main` redéploie automatiquement le site (lancer manuellement possible via **Actions → Deploy to GitHub Pages → Run workflow**).
+Chaque `push` sur la branche `main` met le site à jour automatiquement.
 
 Le site est alors accessible à l'adresse :
 
@@ -152,6 +154,8 @@ https://<utilisateur>.github.io/<depot>/
 ```
 
 > À savoir : le site est servi en **HTTPS**, donc la caméra du scan fonctionne. Les données restent locales au navigateur de chaque visiteur (`localStorage`) — rien n'est envoyé sur le serveur.
+>
+> Pour un dépôt **privé**, la publication GitHub Pages nécessite un compte GitHub Pro/Team. Avec un dépôt **public**, c'est gratuit.
 
 ---
 
