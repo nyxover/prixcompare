@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrixCompare</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--text:#111;--muted:#6b7280;--primary:#2563eb;--border:#e5e7eb}
+body.dark{--bg:#0b1020;--card:#151a2b;--text:#f3f4f6;--muted:#9ca3af;--border:#232a45}
+*{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+body{margin:0;background:var(--bg);color:var(--text)}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+nav{display:flex;gap:8px;flex-wrap:wrap}
+nav button{border:1px solid var(--border);background:var(--card);color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer}
+nav button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+main{padding:16px;max-width:980px;margin:0 auto}
+section{display:none}
+section.active{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,0.02)}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input,select,button{padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;text-align:left;border-bottom:1px solid var(--border)}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+<div><strong>PrixCompare</strong> <span class="muted">webapp</span></div>
+<nav>
+<button class="active" data-tab="add">Ajouter</button>
+<button data-tab="products">Produits</button>
+<button data-tab="history">Historique</button>
+<button data-tab="compare">Comparer</button>
+<button data-tab="settings">Réglages</button>
+</nav>
+<button id="theme">🌙/☀️</button>
+</header>
+<main>
+<section id="add" class="active">
+<div class="card">
+<div class="row">
+<select id="mode">
+<option value="manual">Manuel</option>
+<option value="scan">Scan code-barres</option>
+<option value="photo">Photo produit</option>
+</select>
+</div>
+<div id="form-manual" class="row" style="margin-top:10px;flex-direction:column;align-items:stretch">
+<input id="m-name" placeholder="Nom produit">
+<input id="m-barcode" placeholder="Code-barres (facultatif)">
+<input id="m-price" placeholder="Prix unitaire (ex 2.99)">
+<input id="m-qty" value="1" placeholder="Quantité">
+<input id="m-store" list="stores" placeholder="Magasin (libre)">
+<datalist id="stores"></datalist>
+<input id="m-date" type="date">
+<button id="m-photo">Associer photo (local)</button>
+<input id="m-photo-file" type="file" accept="image/*" style="display:none">
+<img id="m-photo-prev" style="max-width:160px;border-radius:10px;display:none">
+<button id="m-save">Enregistrer</button>
+</div>
+<div id="form-scan" style="margin-top:10px;display:none">
+<video id="scan-video" autoplay playsinline style="width:100%;max-height:240px;border-radius:10px;display:none;background:#000"></video>
+<div id="scan-controls" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+<button id="scan-start">Activer caméra</button>
+<button id="scan-stop" style="display:none">Arrêter</button>
+</div>
+<p id="scan-status" class="muted" style="margin:4px 0 0 0"></p>
+<input id="s-barcode" placeholder="Code-barres">
+<input id="s-name" placeholder="Nom produit">
+<input id="s-price" placeholder="Prix">
+<input id="s-store" list="stores2" placeholder="Magasin">
+<datalist id="stores2"></datalist>
+<button id="s-save">Enregistrer</button>
+</div>
+<div id="form-photo" style="margin-top:10px;display:none">
+<button id="p-photo">Choisir photo</button>
+<input id="p-photo-file" type="file" accept="image/*" style="display:none">
+<img id="p-photo-prev" style="max-width:160px;border-radius:10px;display:none">
+<input id="p-name" placeholder="Nom produit">
+<input id="p-price" placeholder="Prix">
+<input id="p-store" list="stores3" placeholder="Magasin">
+<datalist id="stores3"></datalist>
+<button id="p-save">Associer & enregistrer</button>
+</div>
+</div>
+</section>
+
+<section id="products">
+<div class="card">
+<div class="grid" id="products-grid"></div>
+</div>
+</section>
+
+<section id="history">
+<div class="card">
+<table><thead><tr><th>Date</th><th>Produit</th><th>Magasin</th><th>Prix</th><th>Qté</th><th>Total</th></tr></thead><tbody id="hist-body"></tbody></table>
+</div>
+</section>
+
+<section id="compare">
+<div class="card">
+<div class="row">
+<select id="cmp-prod"><option value="">Sélectionner produit</option></select>
+</div>
+<div style="margin-top:10px" id="cmp-list"></div>
+</div>
+</section>
+
+<section id="settings">
+<div class="card">
+<h3 style="margin:0 0 10px 0">Export</h3>
+<div class="row">
+<button id="exp-csv">Exporter CSV</button>
+<button id="exp-json">Exporter JSON</button>
+</div>
+</div>
+<div class="card" style="margin-top:12px">
+<h3 style="margin:0 0 10px 0">Import</h3>
+<div class="row">
+<label class="muted" for="imp-mode">Mode :</label>
+<select id="imp-mode">
+<option value="merge">Fusionner (recommandé)</option>
+<option value="replace">Remplacer</option>
+</select>
+</div>
+<div class="row" style="margin-top:10px">
+<button id="imp-csv-btn">Importer CSV</button>
+<button id="imp-json-btn">Importer JSON</button>
+<input type="file" id="imp-csv" accept=".csv,text/csv" style="display:none">
+<input type="file" id="imp-json" accept=".json,application/json" style="display:none">
+</div>
+<p class="muted" id="imp-result" style="margin:10px 0 0 0"></p>
+<p class="muted">Colonnes CSV attendues : date, product_name, barcode, store, price, quantity, category, note</p>
+<p class="muted">Données stockées localement (localStorage)</p>
+</div>
+</section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

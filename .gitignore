@@ -1,0 +1,22 @@
+# Dépendances / build (au cas où)
+node_modules/
+dist/
+build/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+
+# Exports de données générés par l'app
+prixcompare_export_*.csv
+prixcompare_export_*.json
