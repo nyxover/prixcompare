@@ -261,16 +261,26 @@ function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'
 // ---- cloud (Supabase Storage) -----------------------------------------
 function renderCloudStatus(state, detail) {
   const el = document.getElementById('cloud-status');
-  if (!el) return;
-  if (typeof Cloud === 'undefined' || !Cloud.enabled()) {
-    el.textContent = 'Désactivé — données locales uniquement (localStorage)';
+  const pill = document.getElementById('cloud-pill');
+  const off = (typeof Cloud === 'undefined' || !Cloud.enabled());
+  if (off) {
+    if (el) el.textContent = 'Désactivé — données locales uniquement (localStorage)';
+    if (pill) {
+      pill.textContent = 'Local';
+      pill.className = 'pill off';
+      pill.title = 'Cloud non configuré : renseigne url et anonKey dans cloud.js';
+    }
     return;
   }
   const map = { syncing: 'Synchronisation…', idle: 'Connecté', error: 'Erreur', off: 'Connecté' };
-  let txt = map[state] || state;
-  if (detail) txt += ' (' + detail + ')';
-  if (Cloud.lastSync()) txt += ' • dernière sync ' + new Date(Cloud.lastSync()).toLocaleTimeString();
-  el.textContent = txt;
+  const detailTxt = (map[state] || state) + (detail ? ' (' + detail + ')' : '');
+  const last = Cloud.lastSync() ? ' • dernière sync ' + new Date(Cloud.lastSync()).toLocaleTimeString() : '';
+  if (el) el.textContent = detailTxt + last;
+  if (pill) {
+    pill.className = 'pill ' + (state === 'error' ? 'err' : (state === 'syncing' ? 'busy' : 'ok'));
+    pill.textContent = state === 'error' ? 'Cloud ⚠' : (state === 'syncing' ? 'Sync…' : 'Cloud ✓');
+    pill.title = 'Cloud Supabase — ' + detailTxt + last;
+  }
 }
 async function pushToCloud(silent) {
   if (typeof Cloud === 'undefined' || !Cloud.enabled()) {

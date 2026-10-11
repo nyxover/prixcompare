@@ -23,6 +23,11 @@ input,select,button{padding:9px 10px;border-radius:10px;border:1px solid var(--b
 table{width:100%;border-collapse:collapse}
 th,td{padding:8px;text-align:left;border-bottom:1px solid var(--border)}
 .muted{color:var(--muted)}
+.pill{font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--border);white-space:nowrap}
+.pill.off{color:var(--muted)}
+.pill.ok{background:#16a34a1a;border-color:#16a34a;color:#16a34a}
+.pill.busy{background:#f59e0b1a;border-color:#f59e0b;color:#b45309}
+.pill.err{background:#dc26261a;border-color:#dc2626;color:#dc2626}
 </style>
 </head>
 <body>
@@ -35,7 +40,10 @@ th,td{padding:8px;text-align:left;border-bottom:1px solid var(--border)}
 <button data-tab="compare">Comparer</button>
 <button data-tab="settings">Réglages</button>
 </nav>
+<div style="display:flex;gap:10px;align-items:center">
+<span id="cloud-pill" class="pill off" title="Cloud non configuré : données locales uniquement">Local</span>
 <button id="theme">🌙/☀️</button>
+</div>
 </header>
 <main>
 <section id="add" class="active">
