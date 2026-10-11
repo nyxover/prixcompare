@@ -313,12 +313,14 @@ async function initCloud() {
   if (!Cloud.enabled()) return;
   try {
     const remote = await Cloud.loadDb();
-    if (remote && (Array.isArray(remote.products) || Array.isArray(remote.purchases))) {
+    const remoteHasData = remote && ((remote.products && remote.products.length) || (remote.purchases && remote.purchases.length));
+    if (remoteHasData) {
+      // le cloud fait foi
       db = { products: remote.products || [], purchases: remote.purchases || [] };
       saveLocal(db);
       refreshStores(); renderProducts(); renderHistory(); renderCompare();
     } else {
-      // premier lancement : on publie les données locales
+      // cloud vide ou absent : on publie les données locales (amorçage)
       await Cloud.saveDb(db);
     }
     renderCloudStatus('idle');
