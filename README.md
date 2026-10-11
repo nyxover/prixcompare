@@ -1,5 +1,7 @@
 # PrixCompare — webapp
 
+🏋🏻‍♀️LiveDemo: https://nyxover.github.io/prixcompare/
+
 Application web locale pour enregistrer des achats (produit, magasin, prix) et comparer les prix entre magasins.
 Fonctionne **entièrement dans le navigateur**, sans serveur : les données sont stockées dans le `localStorage`.
 
