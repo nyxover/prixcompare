@@ -26,8 +26,8 @@
  * ---------------------------------------------------------------------------
  */
 const CLOUD_CONFIG = {
-  url: '',            // ex : "https://abcdefghijkl.supabase.co"
-  anonKey: '',        // ex : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  url: 'https://drhxlcsxffwxurbuhhub.supabase.co',
+  anonKey: 'sb_publishable_DKOw7fZGZRRV1dYfaJD9fQ_9BE192op', // clé publishable (publique)
   bucket: 'prixcompare',
   dbPath: 'db.json',  // objet contenant { products, purchases }
   photosDir: 'photos',
@@ -51,11 +51,19 @@ const Cloud = (function () {
     return Object.assign({ apikey: cfg.anonKey, Authorization: 'Bearer ' + cfg.anonKey }, extra || {});
   }
   function setStatus(state, detail) {
-    if (state === 'idle' || state === 'syncing') { /* noop */ }
     if (onStatusCb) onStatusCb(state, detail);
   }
   function lastSync() { return lastSyncAt; }
   function onStatus(cb) { onStatusCb = cb; }
+
+  // Extrait un message d'erreur lisible depuis une réponse Supabase.
+  async function errMessage(res) {
+    try {
+      const j = await res.json();
+      return j.message || j.error || ('HTTP ' + res.status);
+    } catch (e) { return 'HTTP ' + res.status; }
+  }
+  function isNoBucket(msg) { return /NoSuchBucket|Bucket not found/i.test(msg || ''); }
 
   function extFromFile(file) {
     const m = /\.([a-z0-9]+)$/i.exec(file.name || '');
@@ -65,7 +73,7 @@ const Cloud = (function () {
   }
   function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
-  // Lit db.json depuis le bucket. Retourne null si l'objet n'existe pas.
+  // Lit db.json depuis le bucket. Retourne null si l'objet (ou le bucket) n'existe pas.
   async function loadDb() {
     if (!enabled()) return null;
     setStatus('syncing');
@@ -73,7 +81,12 @@ const Cloud = (function () {
       headers: headers(), cache: 'no-store',
     });
     if (res.status === 404) { setStatus('idle'); return null; }
-    if (!res.ok) { setStatus('error', 'HTTP ' + res.status); throw new Error('HTTP ' + res.status); }
+    if (!res.ok) {
+      const msg = await errMessage(res);
+      if (isNoBucket(msg)) { setStatus('error', 'bucket "' + cfg.bucket + '" introuvable'); return null; }
+      setStatus('error', msg);
+      throw new Error(msg);
+    }
     const data = await res.json();
     lastSyncAt = new Date().toISOString();
     setStatus('idle');
@@ -89,7 +102,11 @@ const Cloud = (function () {
       headers: headers({ 'Content-Type': 'application/json', 'x-upsert': 'true' }),
       body: JSON.stringify(db),
     });
-    if (!res.ok) { setStatus('error', 'HTTP ' + res.status); throw new Error('HTTP ' + res.status); }
+    if (!res.ok) {
+      const msg = await errMessage(res);
+      setStatus('error', isNoBucket(msg) ? 'bucket "' + cfg.bucket + '" introuvable' : msg);
+      throw new Error(msg);
+    }
     lastSyncAt = new Date().toISOString();
     setStatus('idle');
     return true;
@@ -112,7 +129,7 @@ const Cloud = (function () {
       headers: headers({ 'Content-Type': file.type || 'image/jpeg', 'x-upsert': 'true', 'cache-control': '3600' }),
       body: file,
     });
-    if (!res.ok) { setStatus('error', 'HTTP ' + res.status); throw new Error('HTTP ' + res.status); }
+    if (!res.ok) { const msg = await errMessage(res); setStatus('error', msg); throw new Error(msg); }
     setStatus('idle');
     return publicUrl(path);
   }
